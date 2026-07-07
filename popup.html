@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <!-- メーターパネル(今日の合計) -->
+  <header class="meter">
+    <div class="meter-top">
+      <span class="brand">AI API COST METER</span>
+      <button id="curToggle" class="cur-toggle" title="表示通貨を切り替え">JPY</button>
+    </div>
+    <div class="meter-reading">
+      <span class="today-label">今日</span>
+      <span id="todayVal" class="odometer">¥0</span>
+    </div>
+    <div class="meter-sub">
+      <span>今月 <b id="monthVal">¥0</b></span>
+      <span>累計 <b id="totalVal">¥0</b></span>
+      <span id="todayCalls" class="calls"></span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="dash" class="on">概要</button>
+    <button data-tab="hist">履歴</button>
+    <button data-tab="calc">電卓</button>
+    <button data-tab="conf">設定</button>
+  </nav>
+
+  <main>
+    <!-- 概要 -->
+    <section id="tab-dash" class="tab on">
+      <h2>今月のモデル別内訳</h2>
+      <div id="dashBar" class="stackbar" hidden></div>
+      <div id="dashList" class="rows"></div>
+      <div id="dashEmpty" class="empty" hidden>
+        <p>まだ記録がありません。</p>
+        <p class="hint">claude.ai や gemini.google.com でチャットすると、「APIで払っていたらいくら相当か」がここに自動で積み上がります。ページの右下にも換算メーターが出ます。</p>
+      </div>
+      <h2>最近7日間</h2>
+      <div id="weekChart" class="week"></div>
+      <p class="note">金額は会話量から推定した<b>API換算の概算</b>です(実際の請求額ではありません)。</p>
+    </section>
+
+    <!-- 履歴 -->
+    <section id="tab-hist" class="tab">
+      <details class="manual">
+        <summary>＋ 手入力で追加</summary>
+        <div class="form-grid">
+          <label>モデル
+            <select id="mModel"></select>
+          </label>
+          <label>入力トークン
+            <input id="mIn" type="number" min="0" value="1000">
+          </label>
+          <label>出力トークン
+            <input id="mOut" type="number" min="0" value="500">
+          </label>
+          <button id="mAdd" class="btn primary">記録する</button>
+        </div>
+      </details>
+      <div id="histList" class="rows"></div>
+      <div id="histEmpty" class="empty" hidden><p>履歴はまだありません。</p></div>
+    </section>
+
+    <!-- 電卓 -->
+    <section id="tab-calc" class="tab">
+      <h2>料金シミュレーター</h2>
+      <div class="form-grid">
+        <label>モデル
+          <select id="cModel"></select>
+        </label>
+        <label>入力トークン / 回
+          <input id="cIn" type="number" min="0" value="2000">
+        </label>
+        <label>出力トークン / 回
+          <input id="cOut" type="number" min="0" value="800">
+        </label>
+        <label>リクエスト回数
+          <input id="cN" type="number" min="1" value="1">
+        </label>
+      </div>
+      <div class="calc-result">
+        <div class="calc-main" id="cResult">—</div>
+        <div class="calc-sub" id="cResultSub"></div>
+      </div>
+      <p class="note">目安: 日本語はおよそ1文字≒1トークン、英語はおよそ4文字≒1トークンです。</p>
+    </section>
+
+    <!-- 設定 -->
+    <section id="tab-conf" class="tab">
+      <h2>Webアプリの換算(claude.ai / Gemini)</h2>
+      <div class="form-grid">
+        <label class="wide check">
+          <span><input id="sHud" type="checkbox"> ページ右下に換算メーターを表示する</span>
+        </label>
+        <label>claude.ai の既定モデル
+          <select id="sClaudeWeb"></select>
+        </label>
+        <label>Gemini の既定モデル
+          <select id="sGeminiWeb"></select>
+        </label>
+      </div>
+      <p class="hint">画面上でモデル名(Opus / Sonnet / Pro / Flash など)を検出できたときはそちらを優先し、できなかったときにこの既定モデルの料金で換算します。</p>
+
+      <h2>表示と推定</h2>
+      <div class="form-grid">
+        <label>表示通貨
+          <select id="sCur">
+            <option value="JPY">日本円 (JPY)</option>
+            <option value="USD">米ドル (USD)</option>
+          </select>
+        </label>
+        <label>為替レート(円 / 1USD)
+          <input id="sRate" type="number" min="1" step="0.1">
+        </label>
+        <label>出力トークンの推定値 / 回
+          <input id="sOutEst" type="number" min="1">
+        </label>
+      </div>
+
+      <h2>料金表(USD / 100万トークン)</h2>
+      <p class="hint">料金改定があったらここを直してください。以降の記録と電卓に反映されます。</p>
+      <div id="priceTable" class="price-table"></div>
+      <div class="btn-row">
+        <button id="sSave" class="btn primary">設定を保存</button>
+        <button id="sReset" class="btn">料金を既定値に戻す</button>
+      </div>
+
+      <h2>データ</h2>
+      <div class="btn-row">
+        <button id="sClear" class="btn danger">記録をすべて削除</button>
+      </div>
+
+      <h2>この拡張機能について</h2>
+      <ul class="about">
+        <li><b>Webアプリの換算</b>: claude.ai / gemini.google.com での会話量(画面上のテキスト)からトークンを推定し、「APIで払っていたらいくら相当か」を計算します。実際のAPIと同じく、送信のたびに会話履歴全体を入力として数えます。</li>
+        <li>Webアプリは定額・無料枠で使えるため、これは<b>実際の請求額ではなく換算値</b>です。プロンプトキャッシュ等の割引は考慮しません。</li>
+        <li><b>API直呼びの記録</b>: ページ上から <code>api.anthropic.com</code> / <code>generativelanguage.googleapis.com</code> へ送られたリクエストも自動記録します(応答は読めないため出力は推定値)。</li>
+        <li>APIキーや会話の本文は保存しません(文字数から計算したトークン数のみ)。データはすべて端末内(chrome.storage.local)に保存されます。</li>
+      </ul>
+    </section>
+  </main>
+
+  <script src="pricing.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
